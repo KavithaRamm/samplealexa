@@ -15,13 +15,16 @@
 package helloworld;
 
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
+import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.amazon.speech.json.SpeechletRequestEnvelope;
 import com.amazon.speech.slu.Intent;
+import com.amazon.speech.slu.Slot;
 import com.amazon.speech.speechlet.Context;
 import com.amazon.speech.speechlet.IntentRequest;
 import com.amazon.speech.speechlet.LaunchRequest;
@@ -37,260 +40,341 @@ import com.amazon.speech.ui.OutputSpeech;
 import com.amazon.speech.ui.PlainTextOutputSpeech;
 import com.amazon.speech.ui.Reprompt;
 import com.amazon.speech.ui.SimpleCard;
+import com.github.kevinsawicki.http.HttpRequest;
 
 import address.Address;
 import address.AlexaDeviceAddressClient;
 import address.exceptions.DeviceAddressClientException;
-import address.exceptions.UnauthorizedException;
 
 /**
- * This is a sample skill that illustrates how to query the Alexa Device Address API.
+ * This is a sample skill that illustrates how to query the Alexa Device Address
+ * API.
  */
 public class ETADetroitStopTimeSpeechlet implements SpeechletV2 {
 
-    private static final Logger log = LoggerFactory.getLogger(ETADetroitStopTimeSpeechlet.class);
+	private static final Logger log = LoggerFactory.getLogger(ETADetroitStopTimeSpeechlet.class);
+	private static final String ROUTE = "RouteNumber";
 
-    /**
-     * This is the default title that this skill will be using for cards.
-     */
-    private static final String ADDRESS_CARD_TITLE = "Sample Device Address Skill";
+	/**
+	 * This is the default title that this skill will be using for cards.
+	 */
+	private static final String ADDRESS_CARD_TITLE = "Sample Device Address Skill";
 
-    /**
-     * The permissions that this skill relies on for retrieving addresses. If the consent token isn't
-     * available or invalid, we will request the user to grant us the following permission
-     * via a permission card.
-     *
-     * Another Possible value if you only want permissions for the country and postal code is:
-     * read::alexa:device:all:address:country_and_postal_code
-     * Be sure to check your permissions settings for your skill on https://developer.amazon.com/
-     */
-    private static final String ALL_ADDRESS_PERMISSION = "read::alexa:device:all:address";
+	/**
+	 * The permissions that this skill relies on for retrieving addresses. If
+	 * the consent token isn't available or invalid, we will request the user to
+	 * grant us the following permission via a permission card.
+	 *
+	 * Another Possible value if you only want permissions for the country and
+	 * postal code is: read::alexa:device:all:address:country_and_postal_code Be
+	 * sure to check your permissions settings for your skill on
+	 * https://developer.amazon.com/
+	 */
+	private static final String ALL_ADDRESS_PERMISSION = "read::alexa:device:all:address";
 
-    private static final String WELCOME_TEXT = "Welcome to the ETA detroit Skill! What do you want to ask?";
-    private static final String HELP_TEXT = "You can use this skill by asking something like: whats my address";
-    private static final String UNHANDLED_TEXT = "This is unsupported. Please ask something else.";
-    private static final String ERROR_TEXT = "There was an error with the skill. Please try again.";
+	private static final String WELCOME_TEXT = "Welcome to the ETA detroit Skill! What do you want to ask?";
+	private static final String HELP_TEXT = "You can use this skill by asking something like: whats my address";
+	private static final String UNHANDLED_TEXT = "This is unsupported. Please ask something else.";
+	private static final String ERROR_TEXT = "There was an error with the skill. Please try again.";
 
-    /**
-     * This is fired when a session is started. Here we could potentially initialize a session in
-     * our own service for the user, or update a record in a table, etc.
-     * @param speechletRequestEnvelope container for the speechlet request.
-     */
-    @Override
-    public void onSessionStarted(SpeechletRequestEnvelope<SessionStartedRequest> speechletRequestEnvelope) {
-        SessionStartedRequest sessionStartedRequest = speechletRequestEnvelope.getRequest();
-        Session session = speechletRequestEnvelope.getSession();
+	/**
+	 * This is fired when a session is started. Here we could potentially
+	 * initialize a session in our own service for the user, or update a record
+	 * in a table, etc.
+	 * 
+	 * @param speechletRequestEnvelope
+	 *            container for the speechlet request.
+	 */
+	@Override
+	public void onSessionStarted(SpeechletRequestEnvelope<SessionStartedRequest> speechletRequestEnvelope) {
+		SessionStartedRequest sessionStartedRequest = speechletRequestEnvelope.getRequest();
+		Session session = speechletRequestEnvelope.getSession();
 
-        log.info("onSessionStarted requestId={}, sessionId={}", sessionStartedRequest.getRequestId(),
-            session.getSessionId());
-    }
+		log.info("onSessionStarted requestId={}, sessionId={}", sessionStartedRequest.getRequestId(), session.getSessionId());
+	}
 
-    /**
-     * When our skill session is started, a launch event will be triggered. In the case of this
-     * sample skill, we will return a welcome message, however the sky is the limit.
-     * @param speechletRequestEnvelope container for the speechlet request.
-     * @return SpeechletResponse our welcome message
-     */
-    @Override
-    public SpeechletResponse onLaunch(SpeechletRequestEnvelope<LaunchRequest> speechletRequestEnvelope) {
-        LaunchRequest launchRequest = speechletRequestEnvelope.getRequest();
-        Session session = speechletRequestEnvelope.getSession();
+	/**
+	 * When our skill session is started, a launch event will be triggered. In
+	 * the case of this sample skill, we will return a welcome message, however
+	 * the sky is the limit.
+	 * 
+	 * @param speechletRequestEnvelope
+	 *            container for the speechlet request.
+	 * @return SpeechletResponse our welcome message
+	 */
+	@Override
+	public SpeechletResponse onLaunch(SpeechletRequestEnvelope<LaunchRequest> speechletRequestEnvelope) {
+		LaunchRequest launchRequest = speechletRequestEnvelope.getRequest();
+		Session session = speechletRequestEnvelope.getSession();
 
-        log.info("onLaunch requestId={}, sessionId={}", launchRequest.getRequestId(),
-            session.getSessionId());
+		log.info("onLaunch requestId={}, sessionId={}", launchRequest.getRequestId(), session.getSessionId());
 
-        return getAskResponse(ADDRESS_CARD_TITLE, WELCOME_TEXT);
-    }
+		return getAskResponse(ADDRESS_CARD_TITLE, WELCOME_TEXT);
+	}
 
-    /**
-     * When we receive an intent, this will be triggered. This function will handle the processing
-     * of that intent based on the intentName. In the case of a GetAddress intent, it will
-     * query the address API.
-     * @param speechletRequestEnvelope container for the speechlet request.
-     * @return SpeechletResponse a message of our address or an error message
-     */
-    @Override
-    public SpeechletResponse onIntent(SpeechletRequestEnvelope<IntentRequest> speechletRequestEnvelope) {
-        IntentRequest intentRequest = speechletRequestEnvelope.getRequest();
-        Session session = speechletRequestEnvelope.getSession();
+	/**
+	 * When we receive an intent, this will be triggered. This function will
+	 * handle the processing of that intent based on the intentName. In the case
+	 * of a GetAddress intent, it will query the address API.
+	 * 
+	 * @param speechletRequestEnvelope
+	 *            container for the speechlet request.
+	 * @return SpeechletResponse a message of our address or an error message
+	 */
+	@Override
+	public SpeechletResponse onIntent(SpeechletRequestEnvelope<IntentRequest> speechletRequestEnvelope) {
+		IntentRequest intentRequest = speechletRequestEnvelope.getRequest();
+		Session session = speechletRequestEnvelope.getSession();
 
-        log.info("onIntent requestId={}, sessionId={}", intentRequest.getRequestId(),
-            session.getSessionId());
+		log.info("onIntent requestId={}, sessionId={}", intentRequest.getRequestId(), session.getSessionId());
 
-        Intent intent = intentRequest.getIntent();
-        String intentName = getIntentName(intent);
+		Intent intent = intentRequest.getIntent();
+		String intentName = getIntentName(intent);
 
-        log.info("Intent received: {}", intentName);
+		log.info("Intent received: {}", intentName);
 
-        // We want to handle each intent differently here, so that we can give each a unique response.
-        // Refer to the Interaction Model for more information:
-        // https://developer.amazon.com/public/solutions/alexa/alexa-skills-kit/docs/alexa-skills-kit-interaction-model-reference
-        switch(intentName) {
-            // This is the custom intent that delivers the main functionality of the sample skill.
-            // Refer to speechAssets/SampleUtterances for examples that would trigger this.
-            case "ETADetroitStopTimeIntent":
-                String consentToken = session.getUser().getPermissions().getConsentToken();
+		// We want to handle each intent differently here, so that we can give
+		// each a unique response.
+		// Refer to the Interaction Model for more information:
+		// https://developer.amazon.com/public/solutions/alexa/alexa-skills-kit/docs/alexa-skills-kit-interaction-model-reference
+		switch (intentName) {
+		// This is the custom intent that delivers the main functionality of the
+		// sample skill.
+		// Refer to speechAssets/SampleUtterances for examples that would
+		// trigger this.
+		case "ETADetroitStopTimeIntent":
+			return getHelloResponse(intent, speechletRequestEnvelope);
+		case "AMAZON.HelpIntent":
+			return getAskResponse(ADDRESS_CARD_TITLE, HELP_TEXT);
+		default:
+			return getAskResponse(ADDRESS_CARD_TITLE, UNHANDLED_TEXT);
+		}
+	}
 
-                if (consentToken == null) {
-                    log.info("The user hasn't authorized the skill. Sending a permissions card.");
-                    return getPermissionsResponse();
-                }
+	SpeechletResponse getHelloResponse(final Intent intent, SpeechletRequestEnvelope<IntentRequest> speechletRequestEnvelope) {
+		String speechText = null;
+		Map<String, Slot> slots = intent.getSlots();
+		Slot routeFromIntent = slots.get(ROUTE);
+		System.out.println("Route from Intent ############" + routeFromIntent.getValue());
 
-                try {
-                    SystemState systemState = getSystemState(speechletRequestEnvelope.getContext());
+		if (routeFromIntent != null) {
+			System.out.println("Inside the if condition");
+			Address address = getAddressResponse(speechletRequestEnvelope);
+			System.out.println("The alexa devce address" + address.getAddressLine1() + address.getAddressLine2() + address.getCity()
+					+ address.getStateOrRegion() + address.getPostalCode());
 
-                    String deviceId = systemState.getDevice().getDeviceId();
-                    String apiEndpoint = systemState.getApiEndpoint();
+			HttpRequest httpRequest = HttpRequest.get("http://nominatim.openstreetmap.org/search?q=" + address.getAddressLine1() + ","
+					+ address.getCity() + "&format=xml&polygon=1&addressdetails=1");
 
-                    AlexaDeviceAddressClient alexaDeviceAddressClient = new AlexaDeviceAddressClient(
-                        deviceId, consentToken, apiEndpoint);
+			System.out.println("Route From Intent@@@@@@@@@@" + routeFromIntent.getValue());
+		}
+		HttpRequest httpRequest = HttpRequest
+				.get("http://ec2-204-236-211-33.compute-1.amazonaws.com:8080/predictedtime?companyID=1&routeID=1&stopID=117&direction=northbound");
+		// String speechText = "Hello world";
+		if (httpRequest.ok()) {
+			JSONObject jsonObject = new JSONObject(httpRequest.body());
+			// JSONObject jsonObj =
+			// jsonObject.getJSONObject("predictedArrivalTime");
+			// speechText = jsonObj.getString("predictedArrivalTime");
+			Object predictedArriTime = jsonObject.get("predictedArrivalTime");
+			if (predictedArriTime instanceof JSONObject) {
+				speechText = "predictedarrivaltime is a jsonobject";
+			} else if (predictedArriTime instanceof String) {
+				speechText = predictedArriTime.toString();
+			}
+		}
+		// Create the Simple card content.
+		SimpleCard card = new SimpleCard();
+		card.setTitle("HelloWorld");
+		card.setContent(speechText);
 
-                    Address addressObject = alexaDeviceAddressClient.getFullAddress();
+		// Create the plain text output.
+		PlainTextOutputSpeech speech = new PlainTextOutputSpeech();
+		speech.setText(speechText);
 
-                    if (addressObject == null) {
-                        return getAskResponse(ADDRESS_CARD_TITLE, ERROR_TEXT);
-                    }
+		return SpeechletResponse.newTellResponse(speech, card);
+	}
 
-                    return getAddressResponse(
-                        addressObject.getAddressLine1(),
-                        addressObject.getStateOrRegion(),
-                        addressObject.getPostalCode());
-                } catch (UnauthorizedException e) {
-                    return getPermissionsResponse();
-                } catch (DeviceAddressClientException e) {
-                    log.error("Device Address Client failed to successfully return the address.", e);
-                    return getAskResponse(ADDRESS_CARD_TITLE, ERROR_TEXT);
-                }
-            // This is one of the many Amazon built in intents.
-            // Refer to the following for a list of all available built in intents:
-            // https://developer.amazon.com/public/solutions/alexa/alexa-skills-kit/docs/built-in-intent-ref/standard-intents
-            case "AMAZON.HelpIntent":
-                return getAskResponse(ADDRESS_CARD_TITLE, HELP_TEXT);
-            default:
-                return getAskResponse(ADDRESS_CARD_TITLE, UNHANDLED_TEXT);
-        }
-    }
+	Address getAddressResponse(SpeechletRequestEnvelope<IntentRequest> speechletRequestEnvelope) {
+		System.out.println("inside the getAddressResponse method");
+		Session session = speechletRequestEnvelope.getSession();
+		System.out.println("session value" + session.toString());
+		System.out.println("user  is" + session.getUser());
+		String consentToken = session.getUser().getPermissions().getConsentToken();
+		System.out.println("The consent token  " + consentToken);
+		Address addressObject = null;
 
-    /**
-     * Similar to onSessionStarted, this method will be fired when the skill session has been closed.
-     * @param speechletRequestEnvelope container for the speechlet request.
-     */
-    @Override
-    public void onSessionEnded(SpeechletRequestEnvelope<SessionEndedRequest> speechletRequestEnvelope) {
-        SessionEndedRequest sessionEndedRequest = speechletRequestEnvelope.getRequest();
-        Session session = speechletRequestEnvelope.getSession();
+		if (consentToken == null) {
+			log.info("The user hasn't authorized the skill. Sending a permissions card.");
+			return null;
+		}
 
-        log.info("onSessionEnded requestId={}, sessionId={}", sessionEndedRequest.getRequestId(),
-            session.getSessionId());
+		SystemState systemState = getSystemState(speechletRequestEnvelope.getContext());
+		String deviceId = systemState.getDevice().getDeviceId();
+		String apiEndpoint = systemState.getApiEndpoint();
 
-    }
+		AlexaDeviceAddressClient alexaDeviceAddressClient = new AlexaDeviceAddressClient(deviceId, consentToken, apiEndpoint);
 
-    /**
-     * Creates a {@code SpeechletResponse} for the GetAddress intent.
-     * @return SpeechletResponse spoken and visual response for the given intent
-     */
-    private SpeechletResponse getAddressResponse(String streetName, String state, String zipCode) {
-        String speechText = "Your address is " + streetName + " " + state + ", " + zipCode;
+		try {
+			addressObject = alexaDeviceAddressClient.getFullAddress();
+		} catch (DeviceAddressClientException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
 
-        SimpleCard card = getSimpleCard(ADDRESS_CARD_TITLE, speechText);
+		if (addressObject == null) {
+			System.out.println("Address object null");
+			return null;
+		}
 
-        PlainTextOutputSpeech speech = getPlainTextOutputSpeech(speechText);
+		return addressObject;
 
-        return SpeechletResponse.newTellResponse(speech, card);
-    }
+	}
 
-    /**
-     * Creates a {@code SpeechletResponse} for permission requests.
-     * @return SpeechletResponse spoken and visual response for the given intent
-     */
-    private SpeechletResponse getPermissionsResponse() {
-        String speechText = "You have not given this skill permissions to access your address. " +
-            "Please give this skill permissions to access your address.";
+	/**
+	 * Similar to onSessionStarted, this method will be fired when the skill
+	 * session has been closed.
+	 * 
+	 * @param speechletRequestEnvelope
+	 *            container for the speechlet request.
+	 */
+	@Override
+	public void onSessionEnded(SpeechletRequestEnvelope<SessionEndedRequest> speechletRequestEnvelope) {
+		SessionEndedRequest sessionEndedRequest = speechletRequestEnvelope.getRequest();
+		Session session = speechletRequestEnvelope.getSession();
 
-        // Create the permission card content.
-        // The differences between a permissions card and a simple card is that the
-        // permissions card includes additional indicators for a user to enable permissions if needed.
-        AskForPermissionsConsentCard card = new AskForPermissionsConsentCard();
-        card.setTitle(ADDRESS_CARD_TITLE);
+		log.info("onSessionEnded requestId={}, sessionId={}", sessionEndedRequest.getRequestId(), session.getSessionId());
 
-        Set<String> permissions = new HashSet<>();
-        permissions.add(ALL_ADDRESS_PERMISSION);
-        card.setPermissions(permissions);
+	}
 
-        PlainTextOutputSpeech speech = getPlainTextOutputSpeech(speechText);
+	/**
+	 * Creates a {@code SpeechletResponse} for the GetAddress intent.
+	 * 
+	 * @return SpeechletResponse spoken and visual response for the given intent
+	 */
+	private SpeechletResponse getAddressResponse(String streetName, String state, String zipCode) {
+		String speechText = "Your address is " + streetName + " " + state + ", " + zipCode;
 
-        return SpeechletResponse.newTellResponse(speech, card);
-    }
+		SimpleCard card = getSimpleCard(ADDRESS_CARD_TITLE, speechText);
 
-    /**
-     * Helper method that retrieves the system state from the request context.
-     * @param context request context.
-     * @return SystemState the systemState
-     */
-    private SystemState getSystemState(Context context) {
-        return context.getState(SystemInterface.class, SystemState.class);
-    }
+		PlainTextOutputSpeech speech = getPlainTextOutputSpeech(speechText);
 
-    /**
-     * Helper method that creates a card object.
-     * @param title title of the card
-     * @param content body of the card
-     * @return SimpleCard the display card to be sent along with the voice response.
-     */
-    private SimpleCard getSimpleCard(String title, String content) {
-        SimpleCard card = new SimpleCard();
-        card.setTitle(title);
-        card.setContent(content);
+		return SpeechletResponse.newTellResponse(speech, card);
+	}
 
-        return card;
-    }
+	/**
+	 * Creates a {@code SpeechletResponse} for permission requests.
+	 * 
+	 * @return SpeechletResponse spoken and visual response for the given intent
+	 */
+	private SpeechletResponse getPermissionsResponse() {
+		String speechText = "You have not given this skill permissions to access your address. "
+				+ "Please give this skill permissions to access your address.";
 
-    /**
-     * Helper method that will get the intent name from a provided Intent object. If a name does not
-     * exist then this method will return null.
-     * @param intent intent object provided from a skill request.
-     * @return intent name or null.
-     */
-    private String getIntentName(Intent intent) {
-        return (intent != null) ? intent.getName() : null;
-    }
+		// Create the permission card content.
+		// The differences between a permissions card and a simple card is that
+		// the
+		// permissions card includes additional indicators for a user to enable
+		// permissions if needed.
+		AskForPermissionsConsentCard card = new AskForPermissionsConsentCard();
+		card.setTitle(ADDRESS_CARD_TITLE);
 
-    /**
-     * Helper method for retrieving an OutputSpeech object when given a string of TTS.
-     * @param speechText the text that should be spoken out to the user.
-     * @return an instance of SpeechOutput.
-     */
-    private PlainTextOutputSpeech getPlainTextOutputSpeech(String speechText) {
-        PlainTextOutputSpeech speech = new PlainTextOutputSpeech();
-        speech.setText(speechText);
+		Set<String> permissions = new HashSet<>();
+		permissions.add(ALL_ADDRESS_PERMISSION);
+		card.setPermissions(permissions);
 
-        return speech;
-    }
+		PlainTextOutputSpeech speech = getPlainTextOutputSpeech(speechText);
 
-    /**
-     * Helper method that returns a reprompt object. This is used in Ask responses where you want
-     * the user to be able to respond to your speech.
-     * @param outputSpeech The OutputSpeech object that will be said once and repeated if necessary.
-     * @return Reprompt instance.
-     */
-    private Reprompt getReprompt(OutputSpeech outputSpeech) {
-        Reprompt reprompt = new Reprompt();
-        reprompt.setOutputSpeech(outputSpeech);
+		return SpeechletResponse.newTellResponse(speech, card);
+	}
 
-        return reprompt;
-    }
+	/**
+	 * Helper method that retrieves the system state from the request context.
+	 * 
+	 * @param context
+	 *            request context.
+	 * @return SystemState the systemState
+	 */
+	private SystemState getSystemState(Context context) {
+		return context.getState(SystemInterface.class, SystemState.class);
+	}
 
-    /**
-     * Helper method for retrieving an Ask response with a simple card and reprompt included.
-     * @param cardTitle Title of the card that you want displayed.
-     * @param speechText speech text that will be spoken to the user.
-     * @return the resulting card and speech text.
-     */
-    private SpeechletResponse getAskResponse(String cardTitle, String speechText) {
-        SimpleCard card = getSimpleCard(cardTitle, speechText);
-        PlainTextOutputSpeech speech = getPlainTextOutputSpeech(speechText);
-        Reprompt reprompt = getReprompt(speech);
+	/**
+	 * Helper method that creates a card object.
+	 * 
+	 * @param title
+	 *            title of the card
+	 * @param content
+	 *            body of the card
+	 * @return SimpleCard the display card to be sent along with the voice
+	 *         response.
+	 */
+	private SimpleCard getSimpleCard(String title, String content) {
+		SimpleCard card = new SimpleCard();
+		card.setTitle(title);
+		card.setContent(content);
 
-        return SpeechletResponse.newAskResponse(speech, reprompt, card);
-    }
+		return card;
+	}
+
+	/**
+	 * Helper method that will get the intent name from a provided Intent
+	 * object. If a name does not exist then this method will return null.
+	 * 
+	 * @param intent
+	 *            intent object provided from a skill request.
+	 * @return intent name or null.
+	 */
+	private String getIntentName(Intent intent) {
+		return (intent != null) ? intent.getName() : null;
+	}
+
+	/**
+	 * Helper method for retrieving an OutputSpeech object when given a string
+	 * of TTS.
+	 * 
+	 * @param speechText
+	 *            the text that should be spoken out to the user.
+	 * @return an instance of SpeechOutput.
+	 */
+	private PlainTextOutputSpeech getPlainTextOutputSpeech(String speechText) {
+		PlainTextOutputSpeech speech = new PlainTextOutputSpeech();
+		speech.setText(speechText);
+
+		return speech;
+	}
+
+	/**
+	 * Helper method that returns a reprompt object. This is used in Ask
+	 * responses where you want the user to be able to respond to your speech.
+	 * 
+	 * @param outputSpeech
+	 *            The OutputSpeech object that will be said once and repeated if
+	 *            necessary.
+	 * @return Reprompt instance.
+	 */
+	private Reprompt getReprompt(OutputSpeech outputSpeech) {
+		Reprompt reprompt = new Reprompt();
+		reprompt.setOutputSpeech(outputSpeech);
+
+		return reprompt;
+	}
+
+	/**
+	 * Helper method for retrieving an Ask response with a simple card and
+	 * reprompt included.
+	 * 
+	 * @param cardTitle
+	 *            Title of the card that you want displayed.
+	 * @param speechText
+	 *            speech text that will be spoken to the user.
+	 * @return the resulting card and speech text.
+	 */
+	private SpeechletResponse getAskResponse(String cardTitle, String speechText) {
+		SimpleCard card = getSimpleCard(cardTitle, speechText);
+		PlainTextOutputSpeech speech = getPlainTextOutputSpeech(speechText);
+		Reprompt reprompt = getReprompt(speech);
+
+		return SpeechletResponse.newAskResponse(speech, reprompt, card);
+	}
 }
