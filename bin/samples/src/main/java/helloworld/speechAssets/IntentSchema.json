@@ -1,0 +1,14 @@
+{
+  "intents": [
+    {
+      "intent": "HelloWorldIntent",
+      "slots": [
+        {
+          "name": "Route",
+          "type": "AMAZON.NUMBER"
+        }
+      ]
+    }
+   
+  ]
+}

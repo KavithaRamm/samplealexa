@@ -16,8 +16,7 @@ package address;
 
 import java.util.HashSet;
 import java.util.Set;
-import address.exceptions.DeviceAddressClientException;
-import address.exceptions.UnauthorizedException;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -38,6 +37,9 @@ import com.amazon.speech.ui.OutputSpeech;
 import com.amazon.speech.ui.PlainTextOutputSpeech;
 import com.amazon.speech.ui.Reprompt;
 import com.amazon.speech.ui.SimpleCard;
+
+import address.exceptions.DeviceAddressClientException;
+import address.exceptions.UnauthorizedException;
 
 /**
  * This is a sample skill that illustrates how to query the Alexa Device Address API.

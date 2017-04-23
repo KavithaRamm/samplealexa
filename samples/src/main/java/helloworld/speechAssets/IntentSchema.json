@@ -1,7 +1,13 @@
 {
   "intents": [
     {
-      "intent": "HelloWorldIntent"
+      "slots": [
+        {
+          "name": "RouteNumber",
+          "type": "AMAZON.NUMBER"
+        }
+      ],
+      "intent": "ETADetroitStopTimeIntent"
     },
     {
       "intent": "AMAZON.HelpIntent"
