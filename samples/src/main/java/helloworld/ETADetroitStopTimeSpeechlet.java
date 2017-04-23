@@ -14,10 +14,13 @@
 
 package helloworld;
 
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.json.JSONArray;
 import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -155,6 +158,8 @@ public class ETADetroitStopTimeSpeechlet implements SpeechletV2 {
 		String speechText = null;
 		Map<String, Slot> slots = intent.getSlots();
 		Slot routeFromIntent = slots.get(ROUTE);
+		HttpRequest httpRequest = null;
+		String sourcePath = null;
 		System.out.println("Route from Intent ############" + routeFromIntent.getValue());
 
 		if (routeFromIntent != null) {
@@ -163,19 +168,29 @@ public class ETADetroitStopTimeSpeechlet implements SpeechletV2 {
 			System.out.println("The alexa devce address" + address.getAddressLine1() + address.getAddressLine2() + address.getCity()
 					+ address.getStateOrRegion() + address.getPostalCode());
 
-			HttpRequest httpRequest = HttpRequest.get("http://nominatim.openstreetmap.org/search?q=" + address.getAddressLine1() + ","
-					+ address.getCity() + "&format=xml&polygon=1&addressdetails=1");
+			if (address.getAddressLine2() == null) {
+				System.out.println("The address line2 is nullllllllllllllllllllllllllllllllllllllll");
+				sourcePath = "http://nominatim.openstreetmap.org/search?q=" + address.getAddressLine1().replaceAll(" ","%20") + "," + address.getCity().replaceAll(" ","%20")
+				+ "&format=json&polygon=1&addressdetails=1";
+				System.out.println("address line1" + address.getAddressLine1());
+				System.out.println("city" + address.getCity());
+				System.out.println("Source path "+sourcePath);
+			} else if (address.getAddressLine2() != null) {
+				sourcePath = "http://nominatim.openstreetmap.org/search?q=" + address.getAddressLine1().replaceAll(" ","%20") + ","
+						+ address.getAddressLine2().replaceAll(" ","%20") + "," + address.getCity().replaceAll(" ","%20") + "&format=json&polygon=1&addressdetails=1";
+			}
+			List<String> latandLon = getLatitudeLongitude(sourcePath);
+			String latitude = latandLon.get(0);
+			String longitude = latandLon.get(1);
+			System.out.println("Latitude" + latitude);
+			System.out.println("Longitude" + longitude);
+			System.out.println("Route from Intent" + routeFromIntent.getValue());
 
-			System.out.println("Route From Intent@@@@@@@@@@" + routeFromIntent.getValue());
 		}
-		HttpRequest httpRequest = HttpRequest
+		httpRequest = HttpRequest
 				.get("http://ec2-204-236-211-33.compute-1.amazonaws.com:8080/predictedtime?companyID=1&routeID=1&stopID=117&direction=northbound");
-		// String speechText = "Hello world";
 		if (httpRequest.ok()) {
 			JSONObject jsonObject = new JSONObject(httpRequest.body());
-			// JSONObject jsonObj =
-			// jsonObject.getJSONObject("predictedArrivalTime");
-			// speechText = jsonObj.getString("predictedArrivalTime");
 			Object predictedArriTime = jsonObject.get("predictedArrivalTime");
 			if (predictedArriTime instanceof JSONObject) {
 				speechText = "predictedarrivaltime is a jsonobject";
@@ -193,6 +208,23 @@ public class ETADetroitStopTimeSpeechlet implements SpeechletV2 {
 		speech.setText(speechText);
 
 		return SpeechletResponse.newTellResponse(speech, card);
+	}
+
+	private List<String> getLatitudeLongitude(String sourcePath) {
+		List<String> latAndLon = new ArrayList<>();
+		 if (sourcePath != null) {
+		 HttpRequest httpRequest = HttpRequest.get(sourcePath);
+		if (httpRequest.ok()) {
+			JSONArray jsonArray = new JSONArray(httpRequest.body());
+			JSONObject jsonObject = jsonArray.getJSONObject(0);
+			String latitude = jsonObject.getString("lat");
+			String longitude = jsonObject.getString("lon");
+			latAndLon.add(latitude);
+			latAndLon.add(longitude);
+			return latAndLon;
+			 }
+		}
+		return latAndLon;
 	}
 
 	Address getAddressResponse(SpeechletRequestEnvelope<IntentRequest> speechletRequestEnvelope) {
